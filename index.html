@@ -2,92 +2,158 @@
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>QR Scanner PRO</title>
+  <title>QR Scanner PRO (HP & Laptop)</title>
 
-  <!-- ZXing scanner (lebih kompatibel HP & Laptop) -->
-  <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
+  <!-- ZXing (stabil) -->
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js"></script>
 
   <style>
-    body{font-family:system-ui;margin:0;padding:16px;background:#0b1220;color:#e8eefc}
-    .card{max-width:980px;margin:auto;background:#111a2e;border:1px solid #22304f;border-radius:16px;padding:16px}
+    :root{
+      --bg:#0b1220; --card:#111a2e; --line:#22304f; --text:#e8eefc; --muted:#a8b3cf;
+      --blue:#4f8cff; --green:#22c55e; --red:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{font-family:system-ui;margin:0;padding:16px;background:var(--bg);color:var(--text)}
+    .card{max-width:1050px;margin:auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+    h2{margin:0 0 6px}
+    .muted{color:var(--muted);font-size:13px}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
+    @media(min-width:1050px){ .grid{grid-template-columns:1.2fr .8fr;} }
     .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
     button,input,select{border:0;border-radius:12px;padding:12px 14px;font-weight:800}
-    input,select{width:100%;background:#0b1327;color:#e8eefc;border:1px solid #22304f}
-    button{cursor:pointer;background:#22304f;color:#e8eefc}
+    input,select{width:100%;background:#0b1327;color:var(--text);border:1px solid var(--line)}
+    button{cursor:pointer;background:#22304f;color:var(--text)}
     .primary{background:linear-gradient(135deg,#2b6bff,#5aa1ff)}
     .success{background:linear-gradient(135deg,#16a34a,#22c55e)}
     .danger{background:linear-gradient(135deg,#b91c1c,#ef4444)}
-    .grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
-    @media(min-width:980px){ .grid{grid-template-columns:1.2fr .8fr;} }
     .box{border:1px dashed #36507d;border-radius:14px;overflow:hidden;background:#0b1327}
-    video{width:100%;height:380px;object-fit:cover;display:block;background:#0b1327}
-    .status{margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid #22304f;background:#0b1327;color:#a8b3cf}
-    .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+    video{width:100%;height:420px;object-fit:cover;display:block;background:#0b1327}
+    .status{margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#0b1327;color:var(--muted);font-size:13px}
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;word-break:break-all}
+    .pill{display:inline-block;padding:4px 10px;border-radius:999px;font-weight:900;font-size:12px;margin-left:8px}
+    .ok{background:rgba(34,197,94,.15);color:#7CFFB0;border:1px solid rgba(34,197,94,.35)}
+    .err{background:rgba(239,68,68,.12);color:#ffb3b3;border:1px solid rgba(239,68,68,.35)}
+    .warn{background:rgba(245,158,11,.12);color:#ffd18a;border:1px solid rgba(245,158,11,.35)}
   </style>
 </head>
+
 <body>
-<div class="card">
-  <h2 style="margin:0">📷 QR Scanner PRO (HP & Laptop)</h2>
-  <div class="status">Tips: kalau kamera laptop tidak muncul, pilih device kamera di dropdown, lalu Start.</div>
-
-  <div class="grid">
-    <div>
-      <input id="dataField" placeholder="hasil scan muncul di sini">
-      <div class="row">
-        <button class="primary" onclick="start()">Mulai Scan</button>
-        <button class="danger" onclick="stop()">Stop</button>
-        <button class="success" onclick="save()">Masukan Data</button>
-      </div>
-
-      <div style="margin-top:10px">
-        <select id="cameraSelect"></select>
-      </div>
-
-      <div class="box" style="margin-top:10px">
-        <video id="video" playsinline muted></video>
-      </div>
+  <div class="card">
+    <h2>📷 QR Scanner PRO (HP & Laptop)</h2>
+    <div class="muted">
+      Tips: kalau kamera laptop tidak muncul, pilih device kamera di dropdown, lalu klik <b>Mulai Scan</b>.
+      Jika ada AdBlock/Privacy extension, matikan dulu untuk halaman ini.
     </div>
 
-    <div>
-      <div class="status">
-        Status: <span id="st">siap</span>
+    <div class="grid">
+      <div>
+        <input id="dataField" placeholder="hasil scan muncul di sini (atau isi manual)">
+
+        <div class="row">
+          <button class="primary" id="btnStart">Mulai Scan</button>
+          <button class="danger" id="btnStop">Stop</button>
+          <button class="success" id="btnSave">Masukan Data</button>
+        </div>
+
+        <div style="margin-top:10px">
+          <select id="cameraSelect"></select>
+        </div>
+
+        <div class="box" style="margin-top:10px">
+          <video id="video" playsinline muted></video>
+        </div>
       </div>
-      <div class="status">
-        Endpoint API:
-        <div class="mono" id="apiInfo"></div>
-      </div>
-      <div class="status">
-        Debug:
-        <div class="mono" id="dbg">-</div>
+
+      <div>
+        <div class="status">
+          Status: <span id="stText">siap</span>
+          <span id="stPill" class="pill warn">IDLE</span>
+        </div>
+
+        <div class="status">
+          Endpoint API:
+          <div class="mono" id="apiInfo"></div>
+        </div>
+
+        <div class="status">
+          Debug:
+          <div class="mono" id="dbg">-</div>
+        </div>
+
+        <div class="status">
+          Test cepat API (buka di tab baru):
+          <div class="mono" id="apiTest"></div>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
 <script>
+  // =========================
+  // 1) SET API URL (GAS /exec)
+  // =========================
   const API_URL = "https://script.google.com/macros/s/AKfycby61q2gUCrVVuZcgajY3m9UPgxXNmGpdNT4Mr9wzkhlIXVzXEqPDZSsL1TJBq2RO2RM/exec";
 
-  document.getElementById('apiInfo').textContent = API_URL;
-
+  // =========================
+  // 2) UI helpers
+  // =========================
   const video = document.getElementById('video');
-  const st = document.getElementById('st');
-  const dbg = document.getElementById('dbg');
-  const dataField = document.getElementById('dataField');
   const cameraSelect = document.getElementById('cameraSelect');
+  const dataField = document.getElementById('dataField');
 
+  const stText = document.getElementById('stText');
+  const stPill = document.getElementById('stPill');
+  const dbg = document.getElementById('dbg');
+
+  document.getElementById('apiInfo').textContent = API_URL;
+  document.getElementById('apiTest').textContent = API_URL + "?data=TEST123";
+
+  function setStatus(text, type){
+    stText.textContent = text;
+    stPill.classList.remove('ok','err','warn');
+    if(type === 'ok'){ stPill.classList.add('ok'); stPill.textContent = 'OK'; }
+    else if(type === 'err'){ stPill.classList.add('err'); stPill.textContent = 'ERROR'; }
+    else { stPill.classList.add('warn'); stPill.textContent = 'IDLE'; }
+  }
+  function setDbg(text){ dbg.textContent = text; }
+
+  // =========================
+  // 3) ZXing load check
+  // =========================
+  const ZX = window.ZXingBrowser || window.ZXing || null;
+  if(!ZX){
+    setStatus("Library scanner gagal load (CDN keblok).", "err");
+    setDbg("window.ZXing / window.ZXingBrowser tidak ada. Coba ganti jaringan / matikan adblock.");
+  } else {
+    setDbg("ZXing loaded OK.");
+  }
+
+  // =========================
+  // 4) Scanner state
+  // =========================
   let codeReader = null;
   let controls = null;
 
-  function setStatus(t){ st.textContent = t; }
-  function setDbg(t){ dbg.textContent = t; }
+  async function requestPermissionOnce(){
+    // supaya label device kebaca di laptop
+    const s = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+    s.getTracks().forEach(t=>t.stop());
+  }
 
   async function loadCameras(){
     try{
-      // minta permission dulu biar label device kebaca di laptop
-      await navigator.mediaDevices.getUserMedia({ video:true, audio:false }).then(s=>s.getTracks().forEach(t=>t.stop()));
+      if(!ZX) return;
 
-      const devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        setStatus("Browser tidak support kamera", "err");
+        return;
+      }
+
+      await requestPermissionOnce();
+
+      const devices = await ZX.BrowserCodeReader.listVideoInputDevices();
       cameraSelect.innerHTML = "";
+
       devices.forEach((d, i) => {
         const opt = document.createElement('option');
         opt.value = d.deviceId;
@@ -95,41 +161,57 @@
         cameraSelect.appendChild(opt);
       });
 
-      setDbg(`Cameras: ${devices.length}`);
-      if(!devices.length) setStatus("Tidak ada kamera terdeteksi.");
+      if(devices.length){
+        setStatus("kamera siap (pilih device lalu mulai)", "warn");
+        setDbg(`Cameras detected: ${devices.length}`);
+      } else {
+        setStatus("kamera tidak terdeteksi", "err");
+        setDbg("Tidak ada video input device.");
+      }
+
     }catch(e){
-      setStatus("Izin kamera ditolak / device tidak terbaca");
-      setDbg(e.name + ": " + (e.message||e));
+      setStatus("izin kamera ditolak / device tidak terbaca", "err");
+      setDbg(e.name + ": " + (e.message || e));
     }
   }
 
   async function start(){
     try{
-      setStatus("memulai kamera...");
-      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-        setStatus("Browser tidak support kamera");
+      if(!ZX){
+        setStatus("ZXing belum ter-load. Matikan adblock / coba jaringan lain.", "err");
         return;
       }
 
-      await loadCameras();
+      if(controls){
+        setStatus("scanner sudah jalan", "warn");
+        return;
+      }
+
+      setStatus("memulai kamera...", "warn");
+
+      // pastikan list kamera ada
+      if(!cameraSelect.options.length){
+        await loadCameras();
+      }
 
       const deviceId = cameraSelect.value || undefined;
-      codeReader = new ZXingBrowser.BrowserQRCodeReader();
 
-      // start decoding from video device
+      codeReader = new ZX.BrowserQRCodeReader();
+
       controls = await codeReader.decodeFromVideoDevice(deviceId, video, (result, err, ctl) => {
         if(result){
           const text = result.getText();
           dataField.value = text;
-          setStatus("QR terbaca ✅");
-          stop(); // stop setelah sukses (kalau mau mode kasir, nanti kita ubah)
+          setStatus("QR terbaca ✅", "ok");
+          stop(); // stop setelah sukses; kalau mau mode kasir nanti kita ubah
         }
       });
 
-      setStatus("kamera aktif, arahkan QR...");
+      setStatus("kamera aktif, arahkan QR...", "ok");
+
     }catch(e){
-      setStatus("kamera gagal: " + (e.message||e));
-      setDbg(e.name + ": " + (e.message||e));
+      setStatus("kamera gagal", "err");
+      setDbg(e.name + ": " + (e.message || e));
     }
   }
 
@@ -137,21 +219,23 @@
     try{
       if(controls) controls.stop();
       controls = null;
-      if(codeReader) codeReader = null;
-      // video stream akan dihentikan oleh controls.stop()
-      setStatus("berhenti");
+      codeReader = null;
+      setStatus("berhenti", "warn");
     }catch(e){}
   }
 
   async function save(){
     const data = (dataField.value || "").trim();
-    if(!data){ setStatus("data kosong"); return; }
+    if(!data){
+      setStatus("data kosong", "err");
+      return;
+    }
 
-    setStatus("mengirim...");
+    setStatus("mengirim...", "warn");
     setDbg("sending (no-cors) ...");
 
-    // Kirim tanpa CORS preflight & tanpa nunggu JSON response (biar tidak stuck)
     try{
+      // no-cors: request tetap terkirim walau browser tidak mengizinkan baca response
       await fetch(API_URL, {
         method: "POST",
         mode: "no-cors",
@@ -159,16 +243,24 @@
         body: JSON.stringify({ data })
       });
 
-      setStatus("terkirim ✅ (cek sheet)");
+      setStatus("terkirim ✅ (cek sheet)", "ok");
       dataField.value = "";
-      setDbg("sent. if sheet still empty, test API with ?data=TEST123");
+      setDbg("sent. Jika sheet kosong, test API: buka URL ?data=TEST123");
+
     }catch(e){
-      setStatus("gagal kirim: " + (e.message||e));
-      setDbg(e.name + ": " + (e.message||e));
+      setStatus("gagal kirim", "err");
+      setDbg(e.name + ": " + (e.message || e));
     }
   }
 
-  // Auto load kamera list saat buka halaman
+  // =========================
+  // 5) Bind buttons
+  // =========================
+  document.getElementById('btnStart').addEventListener('click', start);
+  document.getElementById('btnStop').addEventListener('click', stop);
+  document.getElementById('btnSave').addEventListener('click', save);
+
+  // Auto load camera list
   loadCameras();
 </script>
 </body>
