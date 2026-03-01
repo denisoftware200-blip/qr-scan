@@ -1,161 +1,175 @@
 <!doctype html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>QR Scanner PRO</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>QR Scanner PRO</title>
 
-<style>
-body{
-  font-family:Arial;
-  background:#0b1220;
-  color:white;
-  margin:0;
-  padding:20px;
-}
-.card{
-  max-width:900px;
-  margin:auto;
-  background:#111a2e;
-  padding:20px;
-  border-radius:15px;
-}
-video{
-  width:100%;
-  border-radius:12px;
-  margin-top:10px;
-}
-button,input{
-  padding:12px;
-  border-radius:10px;
-  border:none;
-  margin-top:10px;
-}
-input{width:100%}
-button{font-weight:bold;cursor:pointer}
-.blue{background:#3b82f6;color:white}
-.green{background:#22c55e;color:white}
-.status{margin-top:10px;color:#9ca3af}
-</style>
+  <!-- ZXing scanner (lebih kompatibel HP & Laptop) -->
+  <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
+
+  <style>
+    body{font-family:system-ui;margin:0;padding:16px;background:#0b1220;color:#e8eefc}
+    .card{max-width:980px;margin:auto;background:#111a2e;border:1px solid #22304f;border-radius:16px;padding:16px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    button,input,select{border:0;border-radius:12px;padding:12px 14px;font-weight:800}
+    input,select{width:100%;background:#0b1327;color:#e8eefc;border:1px solid #22304f}
+    button{cursor:pointer;background:#22304f;color:#e8eefc}
+    .primary{background:linear-gradient(135deg,#2b6bff,#5aa1ff)}
+    .success{background:linear-gradient(135deg,#16a34a,#22c55e)}
+    .danger{background:linear-gradient(135deg,#b91c1c,#ef4444)}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
+    @media(min-width:980px){ .grid{grid-template-columns:1.2fr .8fr;} }
+    .box{border:1px dashed #36507d;border-radius:14px;overflow:hidden;background:#0b1327}
+    video{width:100%;height:380px;object-fit:cover;display:block;background:#0b1327}
+    .status{margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid #22304f;background:#0b1327;color:#a8b3cf}
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+  </style>
 </head>
-
 <body>
 <div class="card">
+  <h2 style="margin:0">📷 QR Scanner PRO (HP & Laptop)</h2>
+  <div class="status">Tips: kalau kamera laptop tidak muncul, pilih device kamera di dropdown, lalu Start.</div>
 
-<h2>📷 QR Scanner LIVE (HP & Laptop)</h2>
+  <div class="grid">
+    <div>
+      <input id="dataField" placeholder="hasil scan muncul di sini">
+      <div class="row">
+        <button class="primary" onclick="start()">Mulai Scan</button>
+        <button class="danger" onclick="stop()">Stop</button>
+        <button class="success" onclick="save()">Masukan Data</button>
+      </div>
 
-<input id="dataField" placeholder="hasil scan muncul di sini">
+      <div style="margin-top:10px">
+        <select id="cameraSelect"></select>
+      </div>
 
-<br>
-<button class="blue" onclick="start()">Mulai Scan</button>
-<button onclick="stop()">Stop</button>
-<button class="green" onclick="save()">Masukan Data</button>
+      <div class="box" style="margin-top:10px">
+        <video id="video" playsinline muted></video>
+      </div>
+    </div>
 
-<video id="video" playsinline muted></video>
-
-<div class="status" id="status">Status: siap</div>
-
+    <div>
+      <div class="status">
+        Status: <span id="st">siap</span>
+      </div>
+      <div class="status">
+        Endpoint API:
+        <div class="mono" id="apiInfo"></div>
+      </div>
+      <div class="status">
+        Debug:
+        <div class="mono" id="dbg">-</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
+  const API_URL = "https://script.google.com/macros/s/AKfycby61q2gUCrVVuZcgajY3m9UPgxXNmGpdNT4Mr9wzkhlIXVzXEqPDZSsL1TJBq2RO2RM/exec";
 
-const API_URL =
-"https://script.google.com/macros/s/AKfycby61q2gUCrVVuZcgajY3m9UPgxXNmGpdNT4Mr9wzkhlIXVzXEqPDZSsL1TJBq2RO2RM/exec";
+  document.getElementById('apiInfo').textContent = API_URL;
 
-let stream;
-let detector;
-let running=false;
+  const video = document.getElementById('video');
+  const st = document.getElementById('st');
+  const dbg = document.getElementById('dbg');
+  const dataField = document.getElementById('dataField');
+  const cameraSelect = document.getElementById('cameraSelect');
 
-const video=document.getElementById("video");
-const status=document.getElementById("status");
-const dataField=document.getElementById("dataField");
+  let codeReader = null;
+  let controls = null;
 
-function setStatus(t){
-  status.innerText="Status: "+t;
-}
+  function setStatus(t){ st.textContent = t; }
+  function setDbg(t){ dbg.textContent = t; }
 
-async function start(){
+  async function loadCameras(){
+    try{
+      // minta permission dulu biar label device kebaca di laptop
+      await navigator.mediaDevices.getUserMedia({ video:true, audio:false }).then(s=>s.getTracks().forEach(t=>t.stop()));
 
-  try{
+      const devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
+      cameraSelect.innerHTML = "";
+      devices.forEach((d, i) => {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = d.label || `Camera ${i+1}`;
+        cameraSelect.appendChild(opt);
+      });
 
-    if(running) return;
-
-    detector = new BarcodeDetector({
-      formats:['qr_code']
-    });
-
-    stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:{ideal:'environment'} },
-      audio:false
-    });
-
-    video.srcObject=stream;
-    await video.play();
-
-    running=true;
-
-    setStatus("kamera aktif... arahkan QR");
-
-    scanLoop();
-
-  }catch(e){
-    setStatus("kamera gagal: "+e.message);
-  }
-}
-
-async function scanLoop(){
-
-  if(!running) return;
-
-  try{
-    const codes = await detector.detect(video);
-
-    if(codes.length){
-      const text=codes[0].rawValue;
-      dataField.value=text;
-      setStatus("QR terbaca ✅");
-      stop();
-      return;
+      setDbg(`Cameras: ${devices.length}`);
+      if(!devices.length) setStatus("Tidak ada kamera terdeteksi.");
+    }catch(e){
+      setStatus("Izin kamera ditolak / device tidak terbaca");
+      setDbg(e.name + ": " + (e.message||e));
     }
-  }catch(e){}
-
-  requestAnimationFrame(scanLoop);
-}
-
-function stop(){
-  running=false;
-  if(stream){
-    stream.getTracks().forEach(t=>t.stop());
-  }
-}
-
-async function save(){
-
-  const data=dataField.value.trim();
-
-  if(!data){
-    setStatus("data kosong");
-    return;
   }
 
-  setStatus("menyimpan...");
+  async function start(){
+    try{
+      setStatus("memulai kamera...");
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        setStatus("Browser tidak support kamera");
+        return;
+      }
 
-  const res=await fetch(API_URL,{
-    method:"POST",
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({data})
-  });
+      await loadCameras();
 
-  const json=await res.json();
+      const deviceId = cameraSelect.value || undefined;
+      codeReader = new ZXingBrowser.BrowserQRCodeReader();
 
-  if(json.ok){
-    setStatus("tersimpan ke sheet ✅");
-    dataField.value="";
-  }else{
-    setStatus("gagal: "+json.message);
+      // start decoding from video device
+      controls = await codeReader.decodeFromVideoDevice(deviceId, video, (result, err, ctl) => {
+        if(result){
+          const text = result.getText();
+          dataField.value = text;
+          setStatus("QR terbaca ✅");
+          stop(); // stop setelah sukses (kalau mau mode kasir, nanti kita ubah)
+        }
+      });
+
+      setStatus("kamera aktif, arahkan QR...");
+    }catch(e){
+      setStatus("kamera gagal: " + (e.message||e));
+      setDbg(e.name + ": " + (e.message||e));
+    }
   }
-}
 
+  function stop(){
+    try{
+      if(controls) controls.stop();
+      controls = null;
+      if(codeReader) codeReader = null;
+      // video stream akan dihentikan oleh controls.stop()
+      setStatus("berhenti");
+    }catch(e){}
+  }
+
+  async function save(){
+    const data = (dataField.value || "").trim();
+    if(!data){ setStatus("data kosong"); return; }
+
+    setStatus("mengirim...");
+    setDbg("sending (no-cors) ...");
+
+    // Kirim tanpa CORS preflight & tanpa nunggu JSON response (biar tidak stuck)
+    try{
+      await fetch(API_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body: JSON.stringify({ data })
+      });
+
+      setStatus("terkirim ✅ (cek sheet)");
+      dataField.value = "";
+      setDbg("sent. if sheet still empty, test API with ?data=TEST123");
+    }catch(e){
+      setStatus("gagal kirim: " + (e.message||e));
+      setDbg(e.name + ": " + (e.message||e));
+    }
+  }
+
+  // Auto load kamera list saat buka halaman
+  loadCameras();
 </script>
-
 </body>
 </html>
