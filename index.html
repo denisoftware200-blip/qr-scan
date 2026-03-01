@@ -2,13 +2,15 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>QR Scanner PRO</title>
+<title>QR Scanner PRO FINAL</title>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
 body{
-  font-family:Arial;
   margin:0;
   padding:20px;
+  font-family:Arial;
   background:#0b1220;
   color:white;
 }
@@ -20,35 +22,32 @@ body{
   border-radius:16px;
   padding:16px;
 }
-video{
-  width:100%;
-  height:420px;
-  object-fit:cover;
-  border-radius:12px;
-  background:#000;
-}
-button,input,select{
+button,input{
   padding:12px;
   border-radius:10px;
   border:none;
   margin-top:10px;
   font-weight:bold;
 }
-input,select{
+input{
   width:100%;
   background:#0b1327;
   color:white;
   border:1px solid #22304f;
 }
-button{cursor:pointer}
 .blue{background:#3b82f6;color:white}
-.green{background:#22c55e;color:white}
 .red{background:#ef4444;color:white}
+.green{background:#22c55e;color:white}
 .status{
   margin-top:10px;
   background:#0b1327;
   padding:10px;
   border-radius:10px;
+}
+#reader{
+  margin-top:10px;
+  border-radius:12px;
+  overflow:hidden;
 }
 </style>
 </head>
@@ -57,7 +56,7 @@ button{cursor:pointer}
 
 <div class="card">
 
-<h2>📷 QR Scanner PRO (NO LIBRARY)</h2>
+<h2>📷 QR Scanner PRO FINAL</h2>
 
 <input id="dataField" placeholder="hasil scan muncul di sini">
 
@@ -66,10 +65,7 @@ button{cursor:pointer}
 <button class="red" onclick="stop()">Stop</button>
 <button class="green" onclick="save()">Masukan Data</button>
 
-<select id="cameraSelect"></select>
-
-<br>
-<video id="video" playsinline muted></video>
+<div id="reader"></div>
 
 <div class="status" id="status">Status: siap</div>
 
@@ -80,98 +76,52 @@ button{cursor:pointer}
 const API_URL =
 "https://script.google.com/macros/s/AKfycby61q2gUCrVVuZcgajY3m9UPgxXNmGpdNT4Mr9wzkhlIXVzXEqPDZSsL1TJBq2RO2RM/exec";
 
-const video=document.getElementById("video");
-const statusEl=document.getElementById("status");
-const dataField=document.getElementById("dataField");
-const cameraSelect=document.getElementById("cameraSelect");
-
-let stream;
-let detector;
-let running=false;
+let scanner;
 
 function setStatus(t){
-  statusEl.innerText="Status: "+t;
+ document.getElementById("status").innerText="Status: "+t;
 }
 
-async function loadCameras(){
-
-  const devices=await navigator.mediaDevices.enumerateDevices();
-
-  cameraSelect.innerHTML="";
-
-  devices
-  .filter(d=>d.kind==="videoinput")
-  .forEach((d,i)=>{
-    const opt=document.createElement("option");
-    opt.value=d.deviceId;
-    opt.text=d.label||("Camera "+(i+1));
-    cameraSelect.appendChild(opt);
-  });
-}
-
-async function start(){
+function start(){
 
   try{
 
-    if(!('BarcodeDetector' in window)){
-      setStatus("Browser tidak support BarcodeDetector");
-      return;
-    }
+    scanner=new Html5Qrcode("reader");
 
-    detector=new BarcodeDetector({formats:['qr_code']});
-
-    const deviceId=cameraSelect.value;
-
-    stream=await navigator.mediaDevices.getUserMedia({
-      video:{
-        deviceId: deviceId ? {exact:deviceId}:undefined
+    scanner.start(
+      { facingMode:"environment" },
+      {
+        fps:10,
+        qrbox:250
       },
-      audio:false
-    });
+      qrCodeMessage => {
 
-    video.srcObject=stream;
-    await video.play();
+        document.getElementById("dataField").value=qrCodeMessage;
 
-    running=true;
+        setStatus("QR terbaca ✅");
+
+        stop();
+
+      },
+      errorMessage => {}
+    );
+
     setStatus("kamera aktif...");
-
-    scanLoop();
 
   }catch(e){
     setStatus("kamera gagal: "+e.message);
   }
 }
 
-async function scanLoop(){
-
-  if(!running) return;
-
-  try{
-    const codes=await detector.detect(video);
-
-    if(codes.length){
-      const text=codes[0].rawValue;
-      dataField.value=text;
-      setStatus("QR terbaca ✅");
-      stop();
-      return;
-    }
-  }catch(e){}
-
-  requestAnimationFrame(scanLoop);
-}
-
 function stop(){
-  running=false;
-  if(stream){
-    stream.getTracks().forEach(t=>t.stop());
+  if(scanner){
+    scanner.stop().then(()=>{}).catch(()=>{});
   }
-  video.srcObject=null;
 }
 
 async function save(){
 
-  const data=dataField.value.trim();
+  const data=document.getElementById("dataField").value.trim();
 
   if(!data){
     setStatus("data kosong");
@@ -190,10 +140,8 @@ async function save(){
   });
 
   setStatus("terkirim ke sheet ✅");
-  dataField.value="";
+  document.getElementById("dataField").value="";
 }
-
-loadCameras();
 
 </script>
 
