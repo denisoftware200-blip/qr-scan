@@ -1,0 +1,161 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>QR Scanner PRO</title>
+
+<style>
+body{
+  font-family:Arial;
+  background:#0b1220;
+  color:white;
+  margin:0;
+  padding:20px;
+}
+.card{
+  max-width:900px;
+  margin:auto;
+  background:#111a2e;
+  padding:20px;
+  border-radius:15px;
+}
+video{
+  width:100%;
+  border-radius:12px;
+  margin-top:10px;
+}
+button,input{
+  padding:12px;
+  border-radius:10px;
+  border:none;
+  margin-top:10px;
+}
+input{width:100%}
+button{font-weight:bold;cursor:pointer}
+.blue{background:#3b82f6;color:white}
+.green{background:#22c55e;color:white}
+.status{margin-top:10px;color:#9ca3af}
+</style>
+</head>
+
+<body>
+<div class="card">
+
+<h2>📷 QR Scanner LIVE (HP & Laptop)</h2>
+
+<input id="dataField" placeholder="hasil scan muncul di sini">
+
+<br>
+<button class="blue" onclick="start()">Mulai Scan</button>
+<button onclick="stop()">Stop</button>
+<button class="green" onclick="save()">Masukan Data</button>
+
+<video id="video" playsinline muted></video>
+
+<div class="status" id="status">Status: siap</div>
+
+</div>
+
+<script>
+
+const API_URL =
+"https://script.google.com/macros/s/AKfycby61q2gUCrVVuZcgajY3m9UPgxXNmGpdNT4Mr9wzkhlIXVzXEqPDZSsL1TJBq2RO2RM/exec";
+
+let stream;
+let detector;
+let running=false;
+
+const video=document.getElementById("video");
+const status=document.getElementById("status");
+const dataField=document.getElementById("dataField");
+
+function setStatus(t){
+  status.innerText="Status: "+t;
+}
+
+async function start(){
+
+  try{
+
+    if(running) return;
+
+    detector = new BarcodeDetector({
+      formats:['qr_code']
+    });
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:{ideal:'environment'} },
+      audio:false
+    });
+
+    video.srcObject=stream;
+    await video.play();
+
+    running=true;
+
+    setStatus("kamera aktif... arahkan QR");
+
+    scanLoop();
+
+  }catch(e){
+    setStatus("kamera gagal: "+e.message);
+  }
+}
+
+async function scanLoop(){
+
+  if(!running) return;
+
+  try{
+    const codes = await detector.detect(video);
+
+    if(codes.length){
+      const text=codes[0].rawValue;
+      dataField.value=text;
+      setStatus("QR terbaca ✅");
+      stop();
+      return;
+    }
+  }catch(e){}
+
+  requestAnimationFrame(scanLoop);
+}
+
+function stop(){
+  running=false;
+  if(stream){
+    stream.getTracks().forEach(t=>t.stop());
+  }
+}
+
+async function save(){
+
+  const data=dataField.value.trim();
+
+  if(!data){
+    setStatus("data kosong");
+    return;
+  }
+
+  setStatus("menyimpan...");
+
+  const res=await fetch(API_URL,{
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({data})
+  });
+
+  const json=await res.json();
+
+  if(json.ok){
+    setStatus("tersimpan ke sheet ✅");
+    dataField.value="";
+  }else{
+    setStatus("gagal: "+json.message);
+  }
+}
+
+</script>
+
+</body>
+</html>
